@@ -97,6 +97,8 @@ function initGraph() {
     .linkDirectionalParticleSpeed(0.005)
     .linkDirectionalParticleWidth(link => Math.log((link.weight / 5000) + 1) + 1)
     .linkDirectionalParticleColor(() => '#FF6B35')
+    .d3AlphaDecay(0.015)
+    .d3VelocityDecay(0.25)
     .onNodeClick(node  => handleNodeClick(node))
     .onNodeHover(node  => handleNodeHover(node))
     .onBackgroundClick(() => {
@@ -105,6 +107,10 @@ function initGraph() {
       resetHighlight();
       closeNodePanel();
     });
+
+  // Tighter force physics — less repulsion, shorter links, nodes cluster closer
+  G.d3Force('charge').strength(-25);
+  G.d3Force('link').distance(25);
 
   window.addEventListener('resize', () => {
     G.width(window.innerWidth);

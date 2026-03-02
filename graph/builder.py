@@ -5,9 +5,9 @@ from graph.models import Edge, GraphMeta, GraphResponse, Node
 
 logger = logging.getLogger(__name__)
 
-MAX_NODES = 200
-MAX_EDGES = 400
-MAX_PEER_EDGES = 100
+MAX_NODES = 500
+MAX_EDGES = 1000
+MAX_PEER_EDGES = 400
 
 TAXONOMY_CONDITION_MAP: dict[str, list[str]] = {
     "Cardiology":        ["I48", "I50"],
@@ -225,8 +225,7 @@ def _add_peer_of_edges(G: nx.DiGraph, payments: list[dict], physicians: list[dic
                 break
             a, b = npi_list[i], npi_list[j]
             same_specialty = specialty_map.get(a) == specialty_map.get(b) and specialty_map.get(a)
-            shared_payer = payers_map.get(a, set()) & payers_map.get(b, set())
-            if same_specialty and shared_payer:
+            if same_specialty:
                 node_a, node_b = f"npi_{a}", f"npi_{b}"
                 if G.has_node(node_a) and G.has_node(node_b):
                     G.add_edge(node_a, node_b, type="PEER_OF", weight=1.0, props={})
