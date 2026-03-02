@@ -55,7 +55,7 @@ async def _fetch_specialty(client: httpx.AsyncClient, state: str, specialty: str
         "version": "2.1",
         "state": state,
         "taxonomy_description": specialty,
-        "limit": 20,
+        "limit": 100,
     }
     try:
         resp = await client.get(BASE_URL, params=params, timeout=15)

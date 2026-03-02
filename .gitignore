@@ -16,7 +16,19 @@ venv/
 .vscode/
 .idea/
 
+# Demo data cache
+data/
+
 # Internal docs — not for public view
 CLAUDE.md
 impiricus-graph-prd.md
 docs/
+screenshot-explanation.md
+
+# Screenshots and local assets
+*.png
+*.jpg
+*.jpeg
+
+# Claude/editor local settings
+.claude/
