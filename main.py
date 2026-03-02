@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from fetchers.npi import fetch_npi_physicians
 from fetchers.open_payments import fetch_open_payments
@@ -97,3 +98,7 @@ async def get_graph(state: str, year: int) -> GraphResponse:
 @app.get("/health")
 async def health() -> dict:
     return {"status": "ok", "cached_queries": len(_cache)}
+
+
+# Serve frontend — must be mounted last so API routes take priority
+app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")

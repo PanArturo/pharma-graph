@@ -1,6 +1,6 @@
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
 
-const API_BASE = 'http://localhost:8000';
+const API_BASE = '';
 
 const NODE_COLORS = {
   pharma:    '#00E5FF',
