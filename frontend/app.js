@@ -53,18 +53,26 @@ const PANEL_BORDER = {
 // ─── APP STATE ────────────────────────────────────────────────────────────────
 
 let G = null;
-let currentData   = null;
-let selectedNode  = null;
+let currentData    = null;
+let selectedNode   = null;
 let highlightNodes = new Set();
 let highlightLinks = new Set();
 let allPharmaNodes = [];
+let mouseX = 0, mouseY = 0;
+
+document.addEventListener('mousemove', e => {
+  mouseX = e.clientX;
+  mouseY = e.clientY;
+  const tt = document.getElementById('node-tooltip');
+  if (tt && tt.style.display !== 'none') positionTooltip();
+});
 
 
 // ─── GRAPH INIT ───────────────────────────────────────────────────────────────
 
 function initGraph() {
   G = ForceGraph3D()(document.getElementById('graph'))
-    .backgroundColor('#08090d')
+    .backgroundColor(document.body.classList.contains('light') ? GRAPH_BG_LIGHT : GRAPH_BG_DARK)
     .nodeId('id')
     .nodeLabel(() => '')  // suppress default tooltip; we use sprites instead
     .nodeColor(node => {
@@ -115,9 +123,17 @@ function initGraph() {
       return (highlightLinks.size && highlightLinks.has(link)) ? base * 4 : base;
     })
     .linkOpacity(0.8)
-    .linkDirectionalParticles(link => (highlightLinks.has(link) && link.type === 'PAID') ? 2 : 0)
-    .linkDirectionalParticleWidth(1.5)
-    .linkDirectionalParticleSpeed(0.005)
+    .linkDirectionalParticles(link => {
+      if (!highlightLinks.has(link)) return 0;
+      return link.type === 'PAID' ? 4 : 1;
+    })
+    .linkDirectionalParticleWidth(link => highlightLinks.has(link) && link.type === 'PAID' ? 2.5 : 1.5)
+    .linkDirectionalParticleColor(link => EDGE_COLORS[link.type] || '#4FC3F7')
+    .linkDirectionalParticleSpeed(link => {
+      if (link.type === 'PAID')    return 0.006;
+      if (link.type === 'PEER_OF') return 0.003;
+      return 0.004;
+    })
     .d3AlphaDecay(0.015)
     .d3VelocityDecay(0.25)
     .onNodeClick(node  => handleNodeClick(node))
@@ -154,11 +170,15 @@ async function loadGraph(state, year) {
     }
     currentData = data;
 
+    const n = data.nodes.length;
+    G.d3Force('charge').strength(-Math.max(40, n * 0.3));
+
     const graphNodes = JSON.parse(JSON.stringify(data.nodes));
     const graphLinks = JSON.parse(JSON.stringify(data.edges));
     G.graphData({ nodes: graphNodes, links: graphLinks });
     updateStatsBar(data);
     updateSidebar(data.nodes);
+    populateMetaPanel(data);
     hideLoading();
   } catch (err) {
     console.error(err);
@@ -181,16 +201,27 @@ function hideLoading() {
 
 // ─── STATS BAR ────────────────────────────────────────────────────────────────
 
+function animateValue(el, target, formatter, duration) {
+  const start = performance.now();
+  function step(now) {
+    const t = Math.min((now - start) / duration, 1);
+    const eased = 1 - Math.pow(1 - t, 3);
+    el.textContent = formatter(Math.round(target * eased));
+    if (t < 1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+
 function updateStatsBar(data) {
   const totalPaid = (data.edges || [])
     .filter(e => e.type === 'PAID')
     .reduce((sum, e) => sum + Number(e.weight || 0), 0);
 
-  document.getElementById('stat-nodes').textContent    = data.meta.node_count;
-  document.getElementById('stat-edges').textContent    = data.meta.edge_count;
-  document.getElementById('stat-payments').textContent = formatMoney(totalPaid);
-  document.getElementById('stat-label').textContent    = `${data.meta.state} · ${data.meta.year}`;
-  document.getElementById('stats-bar').style.display   = 'flex';
+  animateValue(document.getElementById('stat-nodes'),    data.meta.node_count, v => v,           850);
+  animateValue(document.getElementById('stat-edges'),    data.meta.edge_count, v => v,           850);
+  animateValue(document.getElementById('stat-payments'), totalPaid,            formatMoney,      1100);
+  document.getElementById('stat-label').textContent   = `${data.meta.state} · ${data.meta.year}`;
+  document.getElementById('stats-bar').style.display  = 'flex';
 }
 
 // ─── RANKED SIDEBAR ───────────────────────────────────────────────────────────
@@ -521,17 +552,23 @@ function refreshGraph() {
   G.nodeThreeObject(G.nodeThreeObject());
   G.linkColor(G.linkColor());
   G.linkWidth(G.linkWidth());
+  G.linkDirectionalParticles(G.linkDirectionalParticles());
+  G.linkDirectionalParticleWidth(G.linkDirectionalParticleWidth());
 }
 
 // ─── EVENT HANDLERS ───────────────────────────────────────────────────────────
 
 function handleNodeHover(node) {
   if (node) {
-    applyHighlight(node.id);
-  } else if (selectedNode) {
-    applyHighlight(selectedNode.id);
+    showTooltip(node);
+    if (!selectedNode) applyHighlight(node.id);
   } else {
-    resetHighlight();
+    hideTooltip();
+    if (selectedNode) {
+      applyHighlight(selectedNode.id);
+    } else {
+      resetHighlight();
+    }
   }
 }
 
@@ -539,6 +576,87 @@ function handleNodeClick(node) {
   selectedNode = node;
   showNodePanel(node);
   applyHighlight(node.id);
+}
+
+// ─── TOOLTIP ──────────────────────────────────────────────────────────────────
+
+function showTooltip(node) {
+  const el = document.getElementById('node-tooltip');
+  const color = NODE_COLORS[node.type] || '#ffffff';
+
+  let stat = '';
+  if (node.type === 'pharma')    stat = `${formatMoney(node.props.total_paid || 0)} total paid`;
+  if (node.type === 'physician') stat = `${formatMoney(node.props.total_received || 0)} received${node.props.specialty ? ' · ' + node.props.specialty : ''}`;
+  if (node.type === 'drug')      stat = node.props.generic_name || '';
+  if (node.type === 'condition') stat = node.props.icd10_code || '';
+  if (node.type === 'device')    stat = `${formatMoney(node.props.total_payments || 0)} in payments`;
+
+  el.querySelector('.tooltip-type').textContent  = node.type;
+  el.querySelector('.tooltip-type').style.color  = color;
+  el.querySelector('.tooltip-label').textContent = node.label;
+  const statEl = el.querySelector('.tooltip-stat');
+  statEl.textContent    = stat;
+  statEl.style.display  = stat ? 'block' : 'none';
+  el.style.borderColor  = color + '44';
+  el.style.display      = 'block';
+  positionTooltip();
+}
+
+function positionTooltip() {
+  const el = document.getElementById('node-tooltip');
+  const x = Math.min(mouseX + 16, window.innerWidth - 236);
+  const y = mouseY + 18;
+  el.style.left = x + 'px';
+  el.style.top  = y + 'px';
+}
+
+function hideTooltip() {
+  const el = document.getElementById('node-tooltip');
+  if (el) el.style.display = 'none';
+}
+
+// ─── METADATA PANEL ───────────────────────────────────────────────────────────
+
+function toggleMetaPanel() {
+  const panel = document.getElementById('meta-panel');
+  const isOpen = panel.classList.contains('open');
+  // close the other panel first
+  document.getElementById('method-panel').classList.remove('open');
+  document.getElementById('method-btn').classList.remove('active');
+  panel.classList.toggle('open', !isOpen);
+  document.getElementById('info-btn').classList.toggle('active', !isOpen);
+}
+
+function toggleMethodPanel() {
+  const panel = document.getElementById('method-panel');
+  const isOpen = panel.classList.contains('open');
+  // close the other panel first
+  document.getElementById('meta-panel').classList.remove('open');
+  document.getElementById('info-btn').classList.remove('active');
+  panel.classList.toggle('open', !isOpen);
+  document.getElementById('method-btn').classList.toggle('active', !isOpen);
+}
+
+function populateMetaPanel(data) {
+  const nodes = data.nodes || [];
+  const edges = data.edges || [];
+  const meta  = data.meta;
+
+  const counts = {};
+  nodes.forEach(n => { counts[n.type] = (counts[n.type] || 0) + 1; });
+  const totalPaid = edges
+    .filter(e => e.type === 'PAID')
+    .reduce((s, e) => s + Number(e.weight || 0), 0);
+
+  document.getElementById('meta-panel-tag').textContent = `${meta.state} · ${meta.year}`;
+  document.getElementById('meta-period').textContent    = `Full calendar year ${meta.year} (Jan 1 – Dec 31)`;
+  document.getElementById('meta-sources').textContent   = (meta.sources || []).join(' · ');
+  document.getElementById('meta-pharma').textContent     = counts.pharma     || 0;
+  document.getElementById('meta-physicians').textContent = counts.physician   || 0;
+  document.getElementById('meta-drugs').textContent      = counts.drug        || 0;
+  document.getElementById('meta-devices').textContent    = counts.device      || 0;
+  document.getElementById('meta-conditions').textContent = counts.condition   || 0;
+  document.getElementById('meta-total').textContent      = formatMoney(totalPaid);
 }
 
 // ─── LEGEND ───────────────────────────────────────────────────────────────────
@@ -602,8 +720,29 @@ function formatMoney(val) {
   return `$${Math.round(val)}`;
 }
 
+// ─── THEME ────────────────────────────────────────────────────────────────────
+
+const GRAPH_BG_DARK  = '#08090d';
+const GRAPH_BG_LIGHT = '#edf1f7';
+
+function toggleTheme() {
+  const isLight = document.body.classList.toggle('light');
+  document.getElementById('theme-btn').textContent = isLight ? '🌙' : '☀';
+  if (G) G.backgroundColor(isLight ? GRAPH_BG_LIGHT : GRAPH_BG_DARK);
+  localStorage.setItem('theme', isLight ? 'light' : 'dark');
+}
+
+function applySavedTheme() {
+  if (localStorage.getItem('theme') === 'light') {
+    document.body.classList.add('light');
+    const btn = document.getElementById('theme-btn');
+    if (btn) btn.textContent = '🌙';
+  }
+}
+
 // ─── BOOT ─────────────────────────────────────────────────────────────────────
 
+applySavedTheme();
 initStateSelect();
 initYearSelect();
 initGraph();

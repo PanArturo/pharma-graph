@@ -27,6 +27,7 @@
     </div>
 
     <div id="top-bar-right">
+      <button id="theme-btn" onclick="toggleTheme()" title="Toggle light/dark mode">☀</button>
       <button id="reset-btn" onclick="resetCamera()" title="Zoom out to full graph view">⌖ Reset View</button>
       <div id="stats-bar">
         <span>Nodes: <span id="stat-nodes">—</span></span>
@@ -44,6 +45,10 @@
       <input id="sidebar-search" type="text" placeholder="Search..." oninput="filterSidebar(this.value)" />
     </div>
     <div id="pharma-list"></div>
+    <div id="sidebar-footer">
+      <button id="info-btn" onclick="toggleMetaPanel()">ⓘ Data Report</button>
+      <button id="method-btn" onclick="toggleMethodPanel()">⊕ Methodology</button>
+    </div>
   </div>
 
   <!-- ─── Node Info Panel ──────────────────────────────────────────────────── -->
@@ -70,7 +75,7 @@
       </div>
     </div>
 
-    <!-- Pharma-specific detail sections (only visible for pharma nodes) -->
+    <!-- Pharma-specific detail sections -->
     <div id="pharma-detail" style="display:none;">
       <div class="panel-section">
         <div class="panel-section-title" style="color:#FFD600;">Drugs</div>
@@ -92,6 +97,106 @@
     </div><!-- /panel-scroll -->
   </div><!-- /node-panel -->
 
+  <!-- ─── Metadata Panel ───────────────────────────────────────────────────── -->
+  <div id="meta-panel">
+    <div class="floating-panel-header">
+      <div>
+        <span class="font-syne floating-panel-title">Data Report</span>
+        <span id="meta-panel-tag"></span>
+      </div>
+      <button class="floating-panel-close" onclick="toggleMetaPanel()">×</button>
+    </div>
+
+    <div class="meta-section">
+      <div class="meta-row">
+        <span class="meta-key">Period</span>
+        <span class="meta-val" id="meta-period">—</span>
+      </div>
+      <div class="meta-row">
+        <span class="meta-key">Sources</span>
+        <span class="meta-val" id="meta-sources">—</span>
+      </div>
+    </div>
+
+    <div class="meta-section">
+      <div class="meta-grid">
+        <div class="meta-stat"><span id="meta-pharma">—</span><div class="meta-stat-label">Companies</div></div>
+        <div class="meta-stat"><span id="meta-physicians">—</span><div class="meta-stat-label">Physicians</div></div>
+        <div class="meta-stat"><span id="meta-drugs">—</span><div class="meta-stat-label">Drugs</div></div>
+        <div class="meta-stat"><span id="meta-devices">—</span><div class="meta-stat-label">Devices</div></div>
+        <div class="meta-stat"><span id="meta-conditions">—</span><div class="meta-stat-label">Conditions</div></div>
+        <div class="meta-stat"><span id="meta-total" style="color:#FF7043;">—</span><div class="meta-stat-label">Payments</div></div>
+      </div>
+    </div>
+
+    <div class="meta-section meta-limits">
+      <div class="meta-limits-title">⚠ Demo Limitations</div>
+      <ul>
+        <li>Payment records capped at <strong>500 per category</strong> (7 categories × 500 rows). Full dataset for large states may contain <strong>50,000+</strong> records.</li>
+        <li>Physicians from <strong>5 specialties</strong> only (NPI Registry has 800+).</li>
+        <li><strong>38 therapeutic conditions</strong> mapped to ICD-10 codes via keyword matching.</li>
+        <li>OpenFDA drug labels unavailable for medical device companies.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ─── Methodology Panel ───────────────────────────────────────────────── -->
+  <div id="method-panel">
+    <div class="floating-panel-header">
+      <span class="font-syne floating-panel-title">Methodology</span>
+      <button class="floating-panel-close" onclick="toggleMethodPanel()">×</button>
+    </div>
+
+    <div id="method-scroll">
+
+      <div class="method-section">
+        <div class="method-section-title">Data Sources</div>
+        <div class="method-item">
+          <div class="method-item-name" style="color:#4FC3F7;">NPI Registry</div>
+          <div class="method-item-desc">Physicians are fetched from the CMS National Provider Identifier registry by state and specialty. Five specialties are queried: Cardiology, Endocrinology, Internal Medicine, Oncology, and Neurology.</div>
+        </div>
+        <div class="method-item">
+          <div class="method-item-name" style="color:#FF7043;">CMS Open Payments</div>
+          <div class="method-item-desc">Pharma-to-physician payment records from the federal Open Payments database. Seven payment categories are queried (consulting fees, speaker honoraria, travel, education, food, grants, and other compensation), up to 500 records each.</div>
+        </div>
+        <div class="method-item">
+          <div class="method-item-name" style="color:#FFD54F;">OpenFDA</div>
+          <div class="method-item-desc">Drug brand names and indications are fetched from FDA drug label records for each pharma company found in payments. Company names are normalized and searched with multiple fallback variants. Medical device companies return no results and are excluded from drug nodes.</div>
+        </div>
+      </div>
+
+      <div class="method-section">
+        <div class="method-section-title">Node Types</div>
+        <div class="method-node-row"><span class="method-dot" style="background:#4FC3F7;"></span><strong>Pharma</strong> — a company that made at least one payment. Size scales with log(total paid).</div>
+        <div class="method-node-row"><span class="method-dot" style="background:#81C995;"></span><strong>Physician</strong> — a doctor who received at least one payment. Size scales with √(total received).</div>
+        <div class="method-node-row"><span class="method-dot" style="background:#FFD54F;"></span><strong>Drug</strong> — a brand-name drug from FDA labels associated with a pharma company.</div>
+        <div class="method-node-row"><span class="method-dot" style="background:#FFAB40;"></span><strong>Device / Product</strong> — a medical product named in a payment record that didn't match a known drug.</div>
+        <div class="method-node-row"><span class="method-dot" style="background:#F48FB1;"></span><strong>Condition</strong> — an ICD-10 therapeutic area parsed from FDA drug label text using 38 keyword patterns.</div>
+      </div>
+
+      <div class="method-section">
+        <div class="method-section-title">Edge Types</div>
+        <div class="method-edge-row"><span class="method-line" style="background:#FF7043;"></span><strong>PAID</strong> — pharma → physician. Weight = total USD transferred. Multiple payments from the same company to the same doctor are summed. Edge width and particle speed scale with payment amount.</div>
+        <div class="method-edge-row"><span class="method-line" style="background:rgba(100,160,220,0.8);"></span><strong>MANUFACTURES</strong> — pharma → drug or device. Created when a company has a matching FDA label or named product in a payment record.</div>
+        <div class="method-edge-row"><span class="method-line" style="background:rgba(100,160,220,0.8);"></span><strong>INDICATED_FOR</strong> — drug → condition. Created when a drug's FDA label text matches a condition keyword.</div>
+        <div class="method-edge-row"><span class="method-line" style="background:rgba(100,160,220,0.8);"></span><strong>SPECIALIZES_IN</strong> — physician → condition. Created based on specialty-to-condition mapping (e.g. Cardiology → Atrial Fibrillation, Heart Failure).</div>
+        <div class="method-edge-row"><span class="method-line" style="background:rgba(100,160,220,0.8);"></span><strong>RECEIVED_FOR</strong> — physician → drug or device. Created when a payment record names a specific product.</div>
+        <div class="method-edge-row"><span class="method-line" style="background:#CE93D8;"></span><strong>PEER_OF</strong> — physician ↔ physician. Two doctors share the same specialty and both appear in the payment data. Capped at 400 edges.</div>
+      </div>
+
+      <div class="method-section">
+        <div class="method-section-title">Payment Calculation</div>
+        <div class="method-item-desc">All dollar figures come directly from CMS Open Payments records and represent the reported payment amount in USD. Where multiple payments exist between the same company and physician they are summed into a single <em>PAID</em> edge. The total displayed in the stats bar is the sum of all visible <em>PAID</em> edge weights and represents a sample — the full year dataset may contain significantly more transactions.</div>
+      </div>
+
+      <div class="method-section" style="border-bottom:none;">
+        <div class="method-section-title">Graph Layout</div>
+        <div class="method-item-desc">The 3D layout is computed by a force-directed simulation. Nodes repel each other while edges act as springs. Repulsion strength scales with node count so sparse datasets (device-heavy years) spread out as much as drug-heavy ones. Node caps: 200 physicians, 80 drugs, 60 devices. Edge cap: 1,200 total, with structural edges prioritised over PAID, and PEER_OF capped last.</div>
+      </div>
+
+    </div>
+  </div>
+
   <!-- ─── Loading Overlay ──────────────────────────────────────────────────── -->
   <div id="loading">
     <div id="loading-dots">
@@ -110,10 +215,10 @@
     </div>
     <div id="legend-body">
       <div class="legend-nodes">
-        <div class="legend-row"><div class="legend-dot" style="background:#4FC3F7; box-shadow:0 0 6px #4FC3F7;"></div><span class="legend-text">Pharma Company</span></div>
+        <div class="legend-row"><div class="legend-dot" style="background:#4FC3F7; box-shadow:0 0 6px #4FC3F7;"></div><span class="legend-text">Pharma</span></div>
         <div class="legend-row"><div class="legend-dot" style="background:#81C995; box-shadow:0 0 6px #81C995;"></div><span class="legend-text">Physician</span></div>
         <div class="legend-row"><div class="legend-dot" style="background:#FFD54F; box-shadow:0 0 6px #FFD54F;"></div><span class="legend-text">Drug</span></div>
-        <div class="legend-row"><div class="legend-dot" style="background:#FFAB40; box-shadow:0 0 6px #FFAB40;"></div><span class="legend-text">Device / Product</span></div>
+        <div class="legend-row"><div class="legend-dot" style="background:#FFAB40; box-shadow:0 0 6px #FFAB40;"></div><span class="legend-text">Device</span></div>
         <div class="legend-row"><div class="legend-dot" style="background:#F48FB1; box-shadow:0 0 6px #F48FB1;"></div><span class="legend-text">Condition</span></div>
       </div>
       <div class="legend-edges">
@@ -122,6 +227,12 @@
         <div class="legend-row"><div class="legend-line" style="background:rgba(100,160,220,0.6);"></div><span class="legend-text">Structural</span></div>
       </div>
     </div>
+  </div>
+
+  <div id="node-tooltip">
+    <div class="tooltip-type"></div>
+    <div class="tooltip-label"></div>
+    <div class="tooltip-stat"></div>
   </div>
 
   <script src="app.js"></script>
