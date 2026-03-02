@@ -16,8 +16,8 @@ venv/
 .vscode/
 .idea/
 
-# Demo data cache
-data/
+# Backend disk cache (root-level only, not frontend/data/)
+/data/
 
 # Internal docs — not for public view
 CLAUDE.md

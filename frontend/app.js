@@ -163,7 +163,7 @@ async function loadGraph(state, year) {
   closeNodePanel();
 
   try {
-    const res = await fetch(`${API_BASE}/api/graph/${state}/${year}`);
+    const res = await fetch(`${API_BASE}/data/${state}_${year}.json`);
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
       throw new Error(data.detail || (Array.isArray(data.detail) ? data.detail.map(d => d.msg || d).join(', ') : null) || `HTTP ${res.status}`);
@@ -672,27 +672,38 @@ function toggleLegend() {
 // ─── SELECTORS ────────────────────────────────────────────────────────────────
 
 // Only years with confirmed CMS dataset IDs
-const VALID_YEARS = [2024, 2023, 2022, 2021, 2020, 2019, 2018];
-const DEFAULT_YEAR = 2024;
+// manifest: { "GA": [2024, 2023], "TX": [2024], ... } — loaded from /data/manifest.json
+let MANIFEST = {};
+
+async function loadManifest() {
+  try {
+    const res = await fetch(`${API_BASE}/data/manifest.json`);
+    if (res.ok) MANIFEST = await res.json();
+  } catch (_) { /* manifest missing — dropdowns stay empty */ }
+}
 
 function initStateSelect() {
   const sel = document.getElementById('state-select');
-  US_STATES.forEach(s => {
+  const states = Object.keys(MANIFEST).sort();
+  states.forEach(s => {
     const opt = document.createElement('option');
     opt.value = s;
     opt.textContent = s;
     if (s === 'GA') opt.selected = true;
     sel.appendChild(opt);
   });
+  // if GA not available, select first
+  if (!MANIFEST['GA'] && states.length) sel.value = states[0];
 }
 
-function initYearSelect() {
+function initYearSelect(state) {
   const sel = document.getElementById('year-select');
-  VALID_YEARS.forEach(y => {
+  sel.innerHTML = '';
+  const years = MANIFEST[state] || [];
+  years.forEach(y => {
     const opt = document.createElement('option');
     opt.value = String(y);
     opt.textContent = String(y);
-    if (y === DEFAULT_YEAR) opt.selected = true;
     sel.appendChild(opt);
   });
 }
@@ -705,12 +716,17 @@ function getSelectedYear() {
   return document.getElementById('year-select').value;
 }
 
-function onSelectorChange() {
+function onStateChange() {
+  initYearSelect(getSelectedState());
   loadGraph(getSelectedState(), getSelectedYear());
 }
 
-document.getElementById('state-select').addEventListener('change', onSelectorChange);
-document.getElementById('year-select').addEventListener('change', onSelectorChange);
+function onYearChange() {
+  loadGraph(getSelectedState(), getSelectedYear());
+}
+
+document.getElementById('state-select').addEventListener('change', onStateChange);
+document.getElementById('year-select').addEventListener('change', onYearChange);
 
 // ─── UTILITIES ────────────────────────────────────────────────────────────────
 
@@ -743,7 +759,9 @@ function applySavedTheme() {
 // ─── BOOT ─────────────────────────────────────────────────────────────────────
 
 applySavedTheme();
-initStateSelect();
-initYearSelect();
 initGraph();
-loadGraph(getSelectedState(), getSelectedYear());
+loadManifest().then(() => {
+  initStateSelect();
+  initYearSelect(getSelectedState());
+  loadGraph(getSelectedState(), getSelectedYear());
+});
